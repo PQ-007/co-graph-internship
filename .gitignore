@@ -1,0 +1,21 @@
+# Byte-code files
+*.pyc
+__pycache__/
+
+# Virtual environments
+venv/
+.venv/
+
+# IDE and Editor files
+.idea/
+.vscode/
+
+# Dependency management
+pip-log.txt
+
+# Logs and temporary files
+*.log
+*.tmp
+
+# Sensitive information
+.env
