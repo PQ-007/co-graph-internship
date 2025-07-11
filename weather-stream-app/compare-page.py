@@ -1,39 +1,10 @@
 import streamlit as st
-import numpy as np
+import streamlit_shadcn_ui as ui
 
-st.set_page_config(layout="wide")
-
-col1, col2 = st.columns(2, border=True)
-
-
-
-with col1:
-    st.header("Location A")
-    with st.expander("See explanation"):
-        st.text_input( label="City name", placeholder="Type City name")
-
-        svg_content = """<svg height="100" width="100">
-        <circle cx="50" cy="50" r="40" stroke="black" stroke-width="3" fill="red" />
-        </svg>
-        """
-        st.markdown(svg_content, unsafe_allow_html=True)
-    with st.container():
-        st.write("This is inside the container")
-
-        # You can call any Streamlit command, including custom components:
-        st.bar_chart(np.random.randn(50, 3), use_container_width=True)
-
-        st.write("This is outside the container")
-
-        
-
-with col2:
-    st.header("Location B")
-    with st.expander("See explanation"):
-        st.write('''
-        The chart above shows some numbers I picked for you.
-        I rolled actual dice for these, so they're *guaranteed* to
-        be random.
-        ''')
-        st.image("https://static.streamlit.io/examples/dice.jpg")
-
+cols = st.columns(3)
+with cols[0]:
+    ui.metric_card(title="Total Revenue", content="$45,231.89", description="+20.1% from last month", key="card1")
+with cols[1]:
+    ui.metric_card(title="Total Revenue", content="$45,231.89", description="+20.1% from last month", key="card2")
+with cols[2]:
+    ui.metric_card(title="Total Revenue", content="$45,231.89", description="+20.1% from last month", key="card3")
