@@ -1,9 +1,124 @@
+import base64
+from streamlit_elements import elements, html
+import time
+import os
+from dotenv import load_dotenv
+import requests
 import streamlit as st
 import pandas as pd
-from utils.helper_methods import HelperClass
 from streamlit_elements import elements, mui, dashboard, nivo
 
-st.set_page_config(layout="wide", page_title="WeatherStream Dashboard", page_icon="🌤️")
+st.set_page_config(
+    layout="wide", page_title="WeatherStream Dashboard", page_icon="🌤️")
+
+
+# 環境変数を読み込む
+load_dotenv()
+api_key = "b8b48032ba0f4bebb3b18c3245317ec7"
+
+
+class HelperClass:
+    def __init__(self):
+        # WeatherBit APIキーとベースURLを初期化
+        self.api_key = api_key
+        self.base_url = "https://api.weatherbit.io/v2.0/"
+
+    def take_weather_hourly(self, hours, city):
+        """指定都市の時間ごとの天気予報を取得"""
+        if not (1 <= hours <= 120):
+            hours = 24  # デフォルト24時間
+
+        try:
+            url = f"{self.base_url}forecast/hourly?city={city}&key={self.api_key}&hours={hours}"
+            response = requests.get(url)
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            # エラー時にログとエラー情報を返す
+            print(f"時間ごとの天気取得エラー: {e}")
+            return {"error": f"エラー: {e}"}
+
+    def take_weather(self, city):
+        """指定都市の現在の天気を取得"""
+        try:
+            url = f"{self.base_url}current?city={city}&key={self.api_key}"
+            response = requests.get(url)
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            # エラー時にログとエラー情報を返す
+            print(f"現在の天気取得エラー: {e}")
+            return {"error": f"エラー: {e}"}
+
+    def take_weather_daily(self, city):
+        """指定都市の日ごとの天気予報を取得"""
+        try:
+            url = f"{self.base_url}forecast/daily?city={city}&key={self.api_key}"
+            response = requests.get(url)
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            # エラー時にログとエラー情報を返す
+            print(f"日ごとの天気取得エラー: {e}")
+            return {"error": f"エラー: {e}"}
+
+    def take_user_location(self):
+        """IPアドレスからユーザーの地域を検出"""
+        try:
+            ip = requests.get("https://api.ipify.org?format=json").json()["ip"]
+            result = requests.get(f"https://ipinfo.io/{ip}/json")
+            return result.json().get("region", None)
+        except Exception as e:
+            # エラー時にログとNoneを返す
+            print(f"現在地検出エラー: {e}")
+            return None
+
+    def convert_temperature(self, temp, to_unit="Celsius"):
+        """温度を摂氏/華氏に変換"""
+        try:
+            temp = float(temp)
+            if to_unit == "Fahrenheit":
+                return round((temp * 9/5) + 32, 1)  # 摂氏→華氏
+            return round(temp, 1)  # 摂氏を返す
+        except (TypeError, ValueError) as e:
+            # エラー時にログと元の値を返す
+            print(f"温度変換エラー: {e}")
+            return temp
+
+    def stream_header_text(self, text: str, speed: float = 0.05):
+        """テキストをヘッダーとして1文字ずつ表示"""
+        title_placeholder = st.empty()
+        current_title = ""
+        for char in text:
+            current_title += char
+            title_placeholder.header(current_title)
+            time.sleep(speed)
+
+    def stream_sub_header_text(self, text: str, speed: float = 0.05):
+        """テキストをサブヘッダーとして1文字ずつ表示"""
+        title_placeholder = st.empty()
+        current_title = ""
+        for char in text:
+            current_title += char
+            title_placeholder.subheader(current_title)
+            time.sleep(speed)
+
+    def display_animated_icon_on_elements(self, path_or_url):
+        """GIFアイコンをURLまたはローカルファイルから表示"""
+        with elements("animated_icon_container"):
+            if path_or_url.startswith("http"):
+                html.img(src=path_or_url, style={
+                         "width": "100%", "height": "auto"})
+            else:
+                try:
+                    with open(path_or_url, "rb") as file:
+                        contents = file.read()
+                        data_url = base64.b64encode(contents).decode("utf-8")
+                        html.img(
+                            src=f"data:image/gif;base64,{data_url}", style={"width": "100%", "height": "auto"})
+                except FileNotFoundError:
+                    html.div("GIFファイルが見つかりません。")
+
 
 # --- Custom CSS for Animations || アニメーション用のカスタムCSS ---
 st.markdown("""
@@ -35,16 +150,19 @@ helper = HelperClass()
 
 # --- Sidebar || サイドバー ---
 with st.sidebar:
-    user_city_input = st.text_input("🌍 Enter City Name:", key="city_input", placeholder="e.g., Tokyo, London, New York")
-    use_current_location = st.checkbox("📍 Auto-detect my location", value=True, key="use_location_checkbox")
-    
+    user_city_input = st.text_input(
+        "🌍 Enter City Name:", key="city_input", placeholder="e.g., Tokyo, London, New York")
+    use_current_location = st.checkbox(
+        "📍 Auto-detect my location", value=True, key="use_location_checkbox")
+
     st.markdown("### Display Options")
     show_detailed_view = st.checkbox("📊 Detailed Analytics", value=True)
-    use_celsius = st.radio("🌡️ Temperature Unit", ["Celsius", "Fahrenheit"], index=0)
-    
+    use_celsius = st.radio("🌡️ Temperature Unit", [
+                           "Celsius", "Fahrenheit"], index=0)
+
     st.markdown("### 🔄 Refresh Rate")
     auto_refresh = st.checkbox("🔄 Auto-refresh (30s)", value=False)
-    
+
     st.markdown("### 📅 Forecast Options")
     show_extended_forecast = st.checkbox("📆 Show 7-Day Forecast", value=True)
 
@@ -68,7 +186,7 @@ if use_current_location:
         except Exception as e:
             st.sidebar.error(f"❌ Error: {str(e)[:50]}...")
             use_current_location = False
-            
+
 if not use_current_location and user_city_input:
     city_to_fetch = user_city_input
 elif not use_current_location and not user_city_input:
@@ -101,7 +219,7 @@ layout = [
     dashboard.Item("sun_set_rise", 7, 2, 3, 3),
     dashboard.Item("metrics_card", 7, 2, 3, 8),
     dashboard.Item("hourly_forecast", 0, 6, 7, 6),
-    dashboard.Item("weekly_forecast", 0, 12, 12, 3 ),
+    dashboard.Item("weekly_forecast", 0, 12, 12, 3),
     dashboard.Item("air_quality", 0, 10, 3, 5),
 ]
 
@@ -134,22 +252,25 @@ with elements("weather_dashboard"):
         ):
             with mui.Box(sx={"position": "absolute", "top": 0, "left": 0, "right": 0, "bottom": 0, "className": "shimmer"}):
                 pass
-            
+
             with mui.Box(sx={"zIndex": 1, "position": "relative", "display": "flex", "alignItems": "center", "width": "100%"}):
                 if city_to_fetch and current_data and "error" not in current_data and "data" in current_data and current_data["data"]:
                     current_weather = current_data["data"][0]
-                    
+
                     with mui.Box(sx={"flex": 1}):
                         mui.Typography(
                             f"{current_weather.get('city_name', city_to_fetch)}, {current_weather.get('country_code', '')}",
                             variant="h3",
-                            sx={"fontWeight": "700", "mb": 1, "textShadow": "2px 2px 6px rgba(0,0,0,0.4)"}
+                            sx={"fontWeight": "700", "mb": 1,
+                                "textShadow": "2px 2px 6px rgba(0,0,0,0.4)"}
                         )
-                        weather_desc = current_weather.get('weather', {}).get('description', 'N/A')
+                        weather_desc = current_weather.get(
+                            'weather', {}).get('description', 'N/A')
                         mui.Typography(
                             weather_desc,
                             variant="h6",
-                            sx={"opacity": 0.9, "fontWeight": "300", "textTransform": "capitalize"}
+                            sx={"opacity": 0.9, "fontWeight": "300",
+                                "textTransform": "capitalize"}
                         )
                         with mui.Box(sx={"display": "flex", "alignItems": "center", "mt": 1}):
                             mui.Box(sx={
@@ -160,10 +281,12 @@ with elements("weather_dashboard"):
                                 "mr": 1,
                                 "animation": "pulse 2s infinite"
                             })
-                            mui.Typography("Live Data", variant="caption", sx={"opacity": 0.8, "fontWeight": "400"})
-                    
+                            mui.Typography("Live Data", variant="caption", sx={
+                                           "opacity": 0.8, "fontWeight": "400"})
+
                     with mui.Box(sx={"display": "flex", "justifyContent": "center", "alignItems": "center", "flex": 1}):
-                        weather_icon_code = current_weather.get('weather', {}).get('icon', '')
+                        weather_icon_code = current_weather.get(
+                            'weather', {}).get('icon', '')
                         if weather_icon_code:
                             mui.Avatar(
                                 src=f"https://www.weatherbit.io/static/img/icons/{weather_icon_code}.png",
@@ -174,22 +297,26 @@ with elements("weather_dashboard"):
                                     "animation": "float 3.5s ease-in-out infinite"
                                 }
                             )
-                    
+
                     with mui.Box(sx={"flex": 1, "textAlign": "right"}):
                         current_time = current_weather.get('datetime', 'N/A')
                         mui.Typography(
                             "Current Time",
                             variant="caption",
-                            sx={"opacity": 0.8, "display": "block", "fontWeight": "400"}
+                            sx={"opacity": 0.8, "display": "block",
+                                "fontWeight": "400"}
                         )
                         mui.Typography(
                             current_time,
                             variant="h6",
                             sx={"fontWeight": "600", "mb": 2}
                         )
-                        temp = helper.convert_temperature(current_weather.get('temp', 0), use_celsius)
-                        status_color = "#00E676" if temp > (15 if use_celsius == "Celsius" else 59) else "#2196F3"
-                        status_text = "Comfortable" if temp > (15 if use_celsius == "Celsius" else 59) else "Cool"
+                        temp = helper.convert_temperature(
+                            current_weather.get('temp', 0), use_celsius)
+                        status_color = "#00E676" if temp > (
+                            15 if use_celsius == "Celsius" else 59) else "#2196F3"
+                        status_text = "Comfortable" if temp > (
+                            15 if use_celsius == "Celsius" else 59) else "Cool"
                         with mui.Chip(
                             label=status_text,
                             sx={
@@ -205,7 +332,8 @@ with elements("weather_dashboard"):
                     mui.Typography(
                         "🌟 Welcome to WeatherStream",
                         variant="h3",
-                        sx={"fontWeight": "700", "textAlign": "center", "width": "100%", "textShadow": "2px 2px 6px rgba(0,0,0,0.4)"}
+                        sx={"fontWeight": "700", "textAlign": "center",
+                            "width": "100%", "textShadow": "2px 2px 6px rgba(0,0,0,0.4)"}
                     )
 
         # --- Main Temperature Card　|| メイン温度カード ---
@@ -243,17 +371,21 @@ with elements("weather_dashboard"):
                 "animation": "float 4s ease-in-out infinite"
             }):
                 pass
-            
+
             with mui.Box(sx={"zIndex": 1, "position": "relative"}):
-                mui.Typography("Current Temperature", variant="h6", sx={"mb": 2, "opacity": 0.9, "fontWeight": "400"})
+                mui.Typography("Current Temperature", variant="h6", sx={
+                               "mb": 2, "opacity": 0.9, "fontWeight": "400"})
                 if current_data and "error" not in current_data and "data" in current_data and current_data["data"]:
                     current_weather = current_data["data"][0]
-                    temp = helper.convert_temperature(current_weather.get('temp', 0), use_celsius)
-                    feels_like = helper.convert_temperature(current_weather.get('app_temp', 0), use_celsius)
+                    temp = helper.convert_temperature(
+                        current_weather.get('temp', 0), use_celsius)
+                    feels_like = helper.convert_temperature(
+                        current_weather.get('app_temp', 0), use_celsius)
                     mui.Typography(
                         f"{temp}°{'C' if use_celsius == 'Celsius' else 'F'}",
                         variant="h1",
-                        sx={"fontWeight": "100", "fontSize": "4.5rem", "mb": 1, "textShadow": "2px 2px 6px rgba(0,0,0,0.4)"}
+                        sx={"fontWeight": "100", "fontSize": "4.5rem",
+                            "mb": 1, "textShadow": "2px 2px 6px rgba(0,0,0,0.4)"}
                     )
                     mui.Typography(
                         f"Feels like {feels_like}°{'C' if use_celsius == 'Celsius' else 'F'}",
@@ -262,10 +394,13 @@ with elements("weather_dashboard"):
                     )
                     with mui.Box(sx={"display": "flex", "alignItems": "center", "justifyContent": "center", "gap": 1}):
                         mui.Typography("📈", variant="h6")
-                        mui.Typography("Trending", variant="body2", sx={"opacity": 0.8})
+                        mui.Typography("Trending", variant="body2", sx={
+                                       "opacity": 0.8})
                 else:
-                    mui.Typography(f"--°{'C' if use_celsius == 'Celsius' else 'F'}", variant="h1", sx={"fontWeight": "100", "fontSize": "4.5rem"})
-                    mui.Typography("No data available", variant="body2", sx={"opacity": 0.8})
+                    mui.Typography(f"--°{'C' if use_celsius == 'Celsius' else 'F'}",
+                                   variant="h1", sx={"fontWeight": "100", "fontSize": "4.5rem"})
+                    mui.Typography("No data available",
+                                   variant="body2", sx={"opacity": 0.8})
 
         # --- Condition Card || コンディションカード ---
         with mui.Paper(
@@ -288,17 +423,20 @@ with elements("weather_dashboard"):
                 }
             }
         ):
-            mui.Typography("Weather Conditions", variant="h6", sx={"mb": 3, "fontWeight": "600"})
+            mui.Typography("Weather Conditions", variant="h6",
+                           sx={"mb": 3, "fontWeight": "600"})
             if current_data and "error" not in current_data and "data" in current_data and current_data["data"]:
                 current_weather = current_data["data"][0]
                 humidity = current_weather.get('rh', 0)
                 with mui.Box(sx={"mb": 2}):
                     with mui.Box(sx={"display": "flex", "justifyContent": "space-between", "mb": 1}):
                         mui.Typography("💧 Humidity", variant="body2")
-                        mui.Typography(f"{humidity}%", variant="body2", sx={"fontWeight": "bold"})
+                        mui.Typography(f"{humidity}%", variant="body2", sx={
+                                       "fontWeight": "bold"})
                     mui.LinearProgress(
                         variant="determinate",
-                        value=humidity if isinstance(humidity, (int, float)) else 0,
+                        value=humidity if isinstance(
+                            humidity, (int, float)) else 0,
                         sx={
                             "height": 10,
                             "borderRadius": 2,
@@ -313,10 +451,12 @@ with elements("weather_dashboard"):
                 with mui.Box(sx={"mb": 2}):
                     with mui.Box(sx={"display": "flex", "justifyContent": "space-between", "mb": 1}):
                         mui.Typography("☁️ Cloud Coverage", variant="body2")
-                        mui.Typography(f"{clouds}%", variant="body2", sx={"fontWeight": "bold"})
+                        mui.Typography(f"{clouds}%", variant="body2", sx={
+                                       "fontWeight": "bold"})
                     mui.LinearProgress(
                         variant="determinate",
-                        value=clouds if isinstance(clouds, (int, float)) else 0,
+                        value=clouds if isinstance(
+                            clouds, (int, float)) else 0,
                         sx={
                             "height": 10,
                             "borderRadius": 2,
@@ -332,10 +472,12 @@ with elements("weather_dashboard"):
                 with mui.Box(sx={"mb": 2}):
                     with mui.Box(sx={"display": "flex", "justifyContent": "space-between", "mb": 1}):
                         mui.Typography("☀️ UV Index", variant="body2")
-                        mui.Typography(str(uv_value), variant="body2", sx={"fontWeight": "bold", "color": uv_color})
+                        mui.Typography(str(uv_value), variant="body2", sx={
+                                       "fontWeight": "bold", "color": uv_color})
                     mui.LinearProgress(
                         variant="determinate",
-                        value=(uv_value / 11) * 100 if isinstance(uv_value, (int, float)) else 0,
+                        value=(uv_value / 11) *
+                        100 if isinstance(uv_value, (int, float)) else 0,
                         sx={
                             "height": 10,
                             "borderRadius": 2,
@@ -351,11 +493,13 @@ with elements("weather_dashboard"):
                     with mui.Box(sx={"display": "flex", "justifyContent": "space-between", "mb": 1}):
                         mui.Typography("👁️ Visibility", variant="body2")
                         mui.Typography(
-                            f"{visibility:.1f} km" if isinstance(visibility, (int, float)) else "N/A",
+                            f"{visibility:.1f} km" if isinstance(
+                                visibility, (int, float)) else "N/A",
                             variant="body2",
                             sx={"fontWeight": "bold"}
                         )
-                    vis_percentage = min((visibility / 10) * 100, 100) if isinstance(visibility, (int, float)) else 0
+                    vis_percentage = min(
+                        (visibility / 10) * 100, 100) if isinstance(visibility, (int, float)) else 0
                     mui.LinearProgress(
                         variant="determinate",
                         value=vis_percentage,
@@ -370,8 +514,9 @@ with elements("weather_dashboard"):
                         }
                     )
             else:
-                mui.Typography("No weather data available", variant="body2", sx={"opacity": 0.8})
-       
+                mui.Typography("No weather data available",
+                               variant="body2", sx={"opacity": 0.8})
+
        # --- Sunset and rise Card　|| 日の出と日の入りカード ---
         with mui.Paper(
             key="sun_set_rise",
@@ -393,7 +538,8 @@ with elements("weather_dashboard"):
                 }
             }
         ):
-            mui.Typography("Sunrise and Sunset", variant="h6", sx={"mb": 2, "fontWeight": "600", "textAlign": "center"})
+            mui.Typography("Sunrise and Sunset", variant="h6", sx={
+                           "mb": 2, "fontWeight": "600", "textAlign": "center"})
             if current_data and "error" not in current_data and "data" in current_data and current_data["data"]:
                 current_weather = current_data["data"][0]
                 sunrise = current_weather.get('sunrise', 'N/A')
@@ -401,8 +547,10 @@ with elements("weather_dashboard"):
 
                 # Format sunrise/sunset times (assuming they are in HH:MM format)
                 try:
-                    sunrise_formatted = pd.to_datetime(sunrise, format='%H:%M').strftime('%I:%M %p') if sunrise != 'N/A' else 'N/A'
-                    sunset_formatted = pd.to_datetime(sunset, format='%H:%M').strftime('%I:%M %p') if sunset != 'N/A' else 'N/A'
+                    sunrise_formatted = pd.to_datetime(sunrise, format='%H:%M').strftime(
+                        '%I:%M %p') if sunrise != 'N/A' else 'N/A'
+                    sunset_formatted = pd.to_datetime(sunset, format='%H:%M').strftime(
+                        '%I:%M %p') if sunset != 'N/A' else 'N/A'
                 except ValueError:
                     sunrise_formatted = sunrise
                     sunset_formatted = sunset
@@ -434,9 +582,11 @@ with elements("weather_dashboard"):
                             "background": "rgba(255, 255, 255, 0.2)",
                         }
                     }):
-                        
-                        mui.Typography("Sunrise", variant="subtitle2", sx={"mb": 0.5, "opacity": 0.8})
-                        mui.Typography(sunrise_formatted, variant="h6", sx={"fontWeight": "bold"})
+
+                        mui.Typography("Sunrise", variant="subtitle2", sx={
+                                       "mb": 0.5, "opacity": 0.8})
+                        mui.Typography(sunrise_formatted, variant="h6", sx={
+                                       "fontWeight": "bold"})
 
                     # Sunset Section
                     with mui.Box(sx={
@@ -452,16 +602,18 @@ with elements("weather_dashboard"):
                         "&:hover": {
                             "background": "rgba(255, 255, 255, 0.2)",
                         }
-                    }):     
-                        mui.Typography("Sunset", variant="subtitle2", sx={"mb": 0.5, "opacity": 0.8})
-                        mui.Typography(sunset_formatted, variant="h6", sx={"fontWeight": "bold"})
+                    }):
+                        mui.Typography("Sunset", variant="subtitle2", sx={
+                                       "mb": 0.5, "opacity": 0.8})
+                        mui.Typography(sunset_formatted, variant="h6", sx={
+                                       "fontWeight": "bold"})
             else:
                 mui.Typography(
                     "No sunrise/sunset data available",
                     variant="body2",
                     sx={"opacity": 0.8, "textAlign": "center", "py": 2}
-                )           
-        
+                )
+
         # --- Metrics Card || メトリクスカード ---
         with mui.Paper(
             key="metrics_card",
@@ -483,38 +635,49 @@ with elements("weather_dashboard"):
                 }
             }
         ):
-            mui.Typography("Atmospheric Data", variant="h6", sx={"mb": 3, "fontWeight": "600", "textAlign": "center"})
+            mui.Typography("Atmospheric Data", variant="h6", sx={
+                           "mb": 3, "fontWeight": "600", "textAlign": "center"})
             if current_data and "error" not in current_data and "data" in current_data and current_data["data"]:
                 current_weather = current_data["data"][0]
                 wind_speed = current_weather.get('wind_spd', 0)
                 wind_dir = current_weather.get('wind_cdir_full', 'N/A')
                 with mui.Box(sx={"mb": 3, "textAlign": "center"}):
-                    mui.Typography("🌪️ Wind", variant="subtitle2", sx={"mb": 1, "opacity": 0.8})
+                    mui.Typography("🌪️ Wind", variant="subtitle2",
+                                   sx={"mb": 1, "opacity": 0.8})
                     mui.Typography(
-                        f"{wind_speed:.1f} m/s" if isinstance(wind_speed, (int, float)) else "N/A",
+                        f"{wind_speed:.1f} m/s" if isinstance(
+                            wind_speed, (int, float)) else "N/A",
                         variant="h4",
                         sx={"fontWeight": "bold", "mb": 0.5}
                     )
-                    mui.Typography(wind_dir, variant="body2", sx={"opacity": 0.8})
+                    mui.Typography(wind_dir, variant="body2",
+                                   sx={"opacity": 0.8})
                 pressure = current_weather.get('pres', 0)
                 with mui.Box(sx={"mb": 3, "textAlign": "center"}):
-                    mui.Typography("🌡️ Pressure", variant="subtitle2", sx={"mb": 1, "opacity": 0.8})
+                    mui.Typography("🌡️ Pressure", variant="subtitle2", sx={
+                                   "mb": 1, "opacity": 0.8})
                     mui.Typography(
-                        f"{pressure:.0f} mb" if isinstance(pressure, (int, float)) else "N/A",
+                        f"{pressure:.0f} mb" if isinstance(
+                            pressure, (int, float)) else "N/A",
                         variant="h4",
                         sx={"fontWeight": "bold", "mb": 0.5}
                     )
-                    mui.Typography("📈 Steady", variant="body2", sx={"opacity": 0.8})
-                dew_point = helper.convert_temperature(current_weather.get('dewpt', 0), use_celsius)
+                    mui.Typography("📈 Steady", variant="body2",
+                                   sx={"opacity": 0.8})
+                dew_point = helper.convert_temperature(
+                    current_weather.get('dewpt', 0), use_celsius)
                 with mui.Box(sx={"mb": 2, "textAlign": "center"}):
-                    mui.Typography("💧 Dew Point", variant="subtitle2", sx={"mb": 1, "opacity": 0.8})
+                    mui.Typography("💧 Dew Point", variant="subtitle2", sx={
+                                   "mb": 1, "opacity": 0.8})
                     mui.Typography(
-                        f"{dew_point}°{'C' if use_celsius == 'Celsius' else 'F'}" if isinstance(dew_point, (int, float)) else "N/A",
+                        f"{dew_point}°{'C' if use_celsius == 'Celsius' else 'F'}" if isinstance(
+                            dew_point, (int, float)) else "N/A",
                         variant="h4",
                         sx={"fontWeight": "bold"}
                     )
                 with mui.Box(sx={"mt": 2, "textAlign": "center"}):
-                    mui.Typography("🌬️ Air Quality", variant="subtitle2", sx={"mb": 1, "opacity": 0.8})
+                    mui.Typography("🌬️ Air Quality", variant="subtitle2", sx={
+                                   "mb": 1, "opacity": 0.8})
                     with mui.Chip(
                         label="Good",
                         sx={
@@ -527,7 +690,8 @@ with elements("weather_dashboard"):
                     ):
                         pass
             else:
-                mui.Typography("No atmospheric data available", variant="body2", sx={"opacity": 0.8})
+                mui.Typography("No atmospheric data available",
+                               variant="body2", sx={"opacity": 0.8})
 
         # --- Hourly Forecast　|| 時間別予報 ---
         with mui.Paper(
@@ -550,7 +714,8 @@ with elements("weather_dashboard"):
                 }
             }
         ):
-            mui.Typography("24-Hour Forecast", variant="h6", sx={"mb": 2, "fontWeight": "600"})
+            mui.Typography("24-Hour Forecast", variant="h6",
+                           sx={"mb": 2, "fontWeight": "600"})
             if forecast_data and "error" not in forecast_data and "data" in forecast_data and forecast_data["data"]:
                 forecast_list = forecast_data["data"][:16]
                 temp_data = []
@@ -563,16 +728,20 @@ with elements("weather_dashboard"):
                             hour = f"H{i+1}"
                     else:
                         hour = f"H{i+1}"
-                    temp_data.append({"x": hour, "y": helper.convert_temperature(hour_data.get('temp', 0), use_celsius)})
+                    temp_data.append({"x": hour, "y": helper.convert_temperature(
+                        hour_data.get('temp', 0), use_celsius)})
                 chart_data = [
-                    {"id": f"Temperature (°{'C' if use_celsius == 'Celsius' else 'F'})", "data": temp_data},
+                    {"id": f"Temperature (°{'C' if use_celsius == 'Celsius' else 'F'})",
+                     "data": temp_data},
                 ]
                 with mui.Box(sx={"height": "300px", "width": "100%"}):
                     nivo.Line(
                         data=chart_data,
-                        margin={"top": 20, "right": 50, "bottom": 60, "left": 60},
+                        margin={"top": 20, "right": 50,
+                                "bottom": 60, "left": 60},
                         xScale={"type": "point"},
-                        yScale={"type": "linear", "min": "auto", "max": "auto"},
+                        yScale={"type": "linear",
+                                "min": "auto", "max": "auto"},
                         curve="cardinal",
                         axisTop=None,
                         axisRight=None,
@@ -609,86 +778,94 @@ with elements("weather_dashboard"):
                         motionConfig="gentle"
                     )
             else:
-                mui.Typography("No hourly forecast data available", variant="body2", sx={"opacity": 0.8})
+                mui.Typography("No hourly forecast data available",
+                               variant="body2", sx={"opacity": 0.8})
 
         # --- Weekly Forecast　|| 週間予報 ---
         with mui.Paper(
-                key="weekly_forecast",
-                sx={
-                    "p": 3,
-                    "display": "flex",
-                    "flexDirection": "column",
-                    "height": "100%",
-                    "borderRadius": 4,
-                    "background": "linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.05) 100%)",
-                    "backdropFilter": "blur(20px)",
-                    "border": "1px solid rgba(255,255,255,0.3)",
-                    "color": "white",
-                    "boxShadow": "0 12px 24px rgba(0,0,0,0.15)",
-                    "transition": "all 0.3s ease",
-                    "&:hover": {
-                        "transform": "translateY(-5px)",
-                        "boxShadow": "0 16px 32px rgba(0,0,0,0.2)",
-                    }
+            key="weekly_forecast",
+            sx={
+                "p": 3,
+                "display": "flex",
+                "flexDirection": "column",
+                "height": "100%",
+                "borderRadius": 4,
+                "background": "linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.05) 100%)",
+                "backdropFilter": "blur(20px)",
+                "border": "1px solid rgba(255,255,255,0.3)",
+                "color": "white",
+                "boxShadow": "0 12px 24px rgba(0,0,0,0.15)",
+                "transition": "all 0.3s ease",
+                "&:hover": {
+                    "transform": "translateY(-5px)",
+                    "boxShadow": "0 16px 32px rgba(0,0,0,0.2)",
                 }
-            ):
-                mui.Typography("7-Day Forecast", variant="h6", sx={"mb": 2, "fontWeight": "600", "textAlign": "center"})
-                if weekly_forecast_data and "error" not in weekly_forecast_data and "data" in weekly_forecast_data and weekly_forecast_data["data"]:
-                    forecast_list = weekly_forecast_data["data"][:7]
-                    temp_data = []
-                    precip_data = []
-                    labels = []
-                    icons = []
-                    temps = []
+            }
+        ):
+            mui.Typography("7-Day Forecast", variant="h6",
+                           sx={"mb": 2, "fontWeight": "600", "textAlign": "center"})
+            if weekly_forecast_data and "error" not in weekly_forecast_data and "data" in weekly_forecast_data and weekly_forecast_data["data"]:
+                forecast_list = weekly_forecast_data["data"][:7]
+                temp_data = []
+                precip_data = []
+                labels = []
+                icons = []
+                temps = []
 
-                    for i, day_data in enumerate(forecast_list):
-                        date_str = day_data.get('datetime', '')
-                        if date_str:
-                            try:
-                                day = pd.to_datetime(date_str).strftime('%a')
-                            except ValueError:
-                                day = f"Day {i+1}"
-                        else:
+                for i, day_data in enumerate(forecast_list):
+                    date_str = day_data.get('datetime', '')
+                    if date_str:
+                        try:
+                            day = pd.to_datetime(date_str).strftime('%a')
+                        except ValueError:
                             day = f"Day {i+1}"
-                        labels.append(day)
-                        temp = helper.convert_temperature(day_data.get('temp', 0), use_celsius)
-                        temp_data.append(temp)
-                        precip_data.append(day_data.get('precip', 0))
-                        temps.append(f"{temp:.1f}°{'C' if use_celsius == 'Celsius' else 'F'}" if isinstance(temp, (int, float)) else "N/A")
-                        icon_code = day_data.get('weather', {}).get('icon', '')
-                        icons.append(f"https://www.weatherbit.io/static/img/icons/{icon_code}.png" if icon_code else None)
+                    else:
+                        day = f"Day {i+1}"
+                    labels.append(day)
+                    temp = helper.convert_temperature(
+                        day_data.get('temp', 0), use_celsius)
+                    temp_data.append(temp)
+                    precip_data.append(day_data.get('precip', 0))
+                    temps.append(f"{temp:.1f}°{'C' if use_celsius == 'Celsius' else 'F'}" if isinstance(
+                        temp, (int, float)) else "N/A")
+                    icon_code = day_data.get('weather', {}).get('icon', '')
+                    icons.append(
+                        f"https://www.weatherbit.io/static/img/icons/{icon_code}.png" if icon_code else None)
 
-                    # Display icons, days, and temperatures above the chart
-                    with mui.Box(sx={
-                        "display": "flex",
-                        "justifyContent": "space-between",
-                        "alignItems": "center",
-                        "mb": 2,
-                        "flexWrap": "wrap",
-                        "@media (max-width: 600px)": {
-                            "flexDirection": "column",
-                            "gap": 1.5,
-                            "alignItems": "center"
-                        }
-                    }):
-                        for i, (day, icon_url, temp) in enumerate(zip(labels, icons, temps)):
-                            with mui.Box(sx={
-                                "textAlign": "center",
-                                "flex": "1 0 12%",
-                                "minWidth": "70px",
-                                "p": 1,
-                                "borderRadius": 2,
-                                
-                                "transition": "background 0.3s ease",
-                                "&:hover": {
-                                    "background": "rgba(255, 255, 255, 0.2)",
-                                }
-                            }):
-                                if icon_url:
-                                    mui.Avatar(
-                                        src=icon_url,
-                                        sx={"width": 30, "height": 30, "mx": "auto", "mb": 0.5},
-                                        ariaLabel=f"Weather icon for {day}"
-                                    )
-                                mui.Typography(day, variant="caption", sx={"opacity": 0.8, "mb": 0.5})
-                                mui.Typography(temp, variant="body2", sx={"fontWeight": "bold", "color": "#00E676"})
+                # Display icons, days, and temperatures above the chart
+                with mui.Box(sx={
+                    "display": "flex",
+                    "justifyContent": "space-between",
+                    "alignItems": "center",
+                    "mb": 2,
+                    "flexWrap": "wrap",
+                    "@media (max-width: 600px)": {
+                        "flexDirection": "column",
+                        "gap": 1.5,
+                        "alignItems": "center"
+                    }
+                }):
+                    for i, (day, icon_url, temp) in enumerate(zip(labels, icons, temps)):
+                        with mui.Box(sx={
+                            "textAlign": "center",
+                            "flex": "1 0 12%",
+                            "minWidth": "70px",
+                            "p": 1,
+                            "borderRadius": 2,
+
+                            "transition": "background 0.3s ease",
+                            "&:hover": {
+                                "background": "rgba(255, 255, 255, 0.2)",
+                            }
+                        }):
+                            if icon_url:
+                                mui.Avatar(
+                                    src=icon_url,
+                                    sx={"width": 30, "height": 30,
+                                        "mx": "auto", "mb": 0.5},
+                                    ariaLabel=f"Weather icon for {day}"
+                                )
+                            mui.Typography(day, variant="caption", sx={
+                                           "opacity": 0.8, "mb": 0.5})
+                            mui.Typography(temp, variant="body2", sx={
+                                           "fontWeight": "bold", "color": "#00E676"})
